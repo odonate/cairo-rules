@@ -1,0 +1,327 @@
+"""Build rules for compiling Cairo code in Please.
+
+"""
+def scarb_toolchain(name:str, version:str, os=None, arch=None, hashes=None, deps=None, visibility=None):    
+    """Defines rules to fetch a Cairo toolchain.
+
+    Args:
+      name (str): Name of the rule.
+      version (str): Version of Scarb to download.
+      os (str): Operating system to download for, as the full triple, e.g. 'unknown-linux-gnu', 'pc-windows-msvc', etc.
+                Defaults to the current OS, as best we can.
+      arch (str): Architecture to download for, e.g. 'i686' or 'x86_64'. Defaults to the current one.
+      hashes (list) List of hashes to verify on download.
+      deps (list): Extra dependencies of the rule.
+      visibility (list): Visibility declaration of the rule.
+    """
+    if not os:
+        if CONFIG.OS == 'linux':
+            os = 'unknown-linux-gnu'
+        elif CONFIG.OS == 'darwin':
+            os = 'apple-darwin'
+        else:
+            raise ParseError('Unknown OS %s, you must pass os explicitly to scarb_toolchain' % CONFIG.OS)
+    if not arch:
+        if CONFIG.ARCH == 'amd64':
+            arch = 'x86_64'
+        elif CONFIG.ARCH == 'x86':
+            arch = 'i686'
+        else:
+            raise ParseError('Unknown architecture %s, you must pass arch explicitly to scarb_toolchain' % CONFIG.ARCH)
+        
+    base = '-'.join(['scarb', version, arch, os])
+    download_rule = remote_file(
+        name = f'_{name}#download',
+        url = f'https://github.com/software-mansion/scarb/releases/download/{version}/{base}.tar.gz',
+        hashes = hashes,
+        deps = deps,
+    )
+    extract_rule = build_rule(
+        name = name,
+        tag = 'extract',
+        srcs = [download_rule],
+        outs = {
+            'scarb_bin': [base + '/bin/scarb'],
+            'scarb_cairo_language_server_bin': [base + '/bin/scarb-cairo-language-server'],
+            'scarb_cairo_run_bin': [base + '/bin/scarb-cairo-run'],
+            'scarb_cairo_test_bin': [base + '/bin/scarb-cairo-test'],
+            'scarb_snforge_test_collector_bin': [base + '/bin/scarb-snforge-test-collector'],
+        },
+        cmd = 'tar -xzf $SRCS',
+        building_description = 'Extracting...',
+    )
+    scarb_rule = filegroup(
+        name = name,
+        tag = 'scarb',
+        srcs = [extract_rule + '|scarb_bin'],
+        binary = True,
+    )
+    scarb_cairo_language_server_rule = filegroup(
+        name = name,
+        tag = 'scarb_cairo_language_server',
+        srcs = [extract_rule + '|scarb_cairo_language_server_bin'],
+        binary = True,
+    )
+    scarb_cairo_run_rule = filegroup(
+        name = name,
+        tag = 'scarb_cairo_run',
+        srcs = [extract_rule + '|scarb_cairo_run_bin'],
+        binary = True,
+    )
+    scarb_cairo_test_rule = filegroup(
+        name = name,
+        tag = 'scarb_cairo_test',
+        srcs = [extract_rule + '|scarb_cairo_test_bin'],
+        binary = True,
+    )
+    scarb_snforge_test_collector_rule = filegroup(
+        name = name,
+        tag = 'scarb_snforge_test_collector',
+        srcs = [extract_rule + '|scarb_snforge_test_collector_bin'],
+        binary = True,
+    )
+
+
+def cairo_toolchain(name:str, version:str, os=None, arch=None, hashes=None, deps=None, visibility=None):    
+    """Defines rules to fetch a Cairo toolchain.
+
+    Args:
+      name (str): Name of the rule.
+      version (str): Version of Scarb to download.
+      os (str): Operating system to download for, as the full triple, e.g. 'unknown-linux-gnu', 'pc-windows-msvc', etc.
+                Defaults to the current OS, as best we can.
+      arch (str): Architecture to download for, e.g. 'i686' or 'x86_64'. Defaults to the current one.
+      hashes (list) List of hashes to verify on download.
+      deps (list): Extra dependencies of the rule.
+      visibility (list): Visibility declaration of the rule.
+    """
+    if not os:
+        if CONFIG.OS == 'linux':
+            os = 'unknown-linux-musl' # No gnu support.
+        elif CONFIG.OS == 'darwin':
+            os = 'apple-darwin'
+        else:
+            raise ParseError('Unknown OS %s, you must pass os explicitly to cairo_toolchain' % CONFIG.OS)
+    if not arch:
+        if CONFIG.ARCH == 'amd64':
+            arch = 'x86_64'
+        # elif CONFIG.ARCH == 'x86':
+        #     arch = 'i686'
+        else:
+            raise ParseError('Unknown architecture %s, you must pass arch explicitly to cairo_toolchain' % CONFIG.ARCH)
+
+    download_rule = remote_file(
+        name = f'_{name}#download',
+        url = f'https://github.com/starkware-libs/cairo/releases/download/{version}/release-{arch}-{os}.tar.gz',
+        hashes = hashes,
+        deps = deps,
+    )
+    extract_rule = build_rule(
+        name = name,
+        tag = 'extract',
+        srcs = [download_rule],
+        outs = {
+            'cairo_corelib_bin': ['/cairo/corelib'],
+            'cairo_compile_bin': ['/cairo/bin/cairo-compile'],
+            'cairo_format_bin': ['/cairo/bin/cairo-format'],
+            'cairo_language_server_bin': ['/cairo/bin/cairo-language-server'],
+            'cairo_run_bin': ['/cairo/bin/cairo-run'],
+            'cairo_test_bin': ['/cairo/bin/cairo-test'],
+            'sierra_compile_bin': ['/cairo/bin/sierra-compile'],
+            'starknet_compile_bin': ['/cairo/bin/starknet-compile'],
+            'starknet_sierra_compile_bin': ['/cairo/bin/starknet-sierra-compile'],
+        },
+        cmd = 'tar -xzf $SRCS',
+        building_description = 'Extracting...',
+    )
+    cairo_corelib_rule = filegroup(
+        name = f'{name}_cairo_corelib',
+        srcs = [extract_rule + '|cairo_corelib_bin'],
+        visibility = visibility,
+        binary = True,
+    )
+    cairo_compile_rule = filegroup(
+        name = f'{name}_cairo_compile',
+        srcs = [extract_rule + '|cairo_compile_bin'],
+        visibility = visibility,
+        binary = True,
+    )
+    cairo_format_rule = filegroup(
+        name = name,
+        tag = 'cairo_format',
+        srcs = [extract_rule + '|cairo_format_bin'],
+        binary = True,
+    )
+    cairo_language_server_rule = filegroup(
+        name = name,
+        tag = 'cairo_language_server',
+        srcs = [extract_rule + '|cairo_language_server_bin'],
+        binary = True,
+    )
+    cairo_run_rule = filegroup(
+        name = name,
+        tag = 'cairo_run',
+        srcs = [extract_rule + '|cairo_run_bin'],
+        binary = True,
+    )
+    cairo_test_rule = filegroup(
+        name = name,
+        tag = 'cairo_test',
+        srcs = [extract_rule + '|cairo_test_bin'],
+        binary = True,
+    )
+    sierra_compile_rule = filegroup(
+        name = f'{name}_sierra_compile',
+        srcs = [extract_rule + '|sierra_compile_bin'],
+        visibility = visibility,
+        binary = True,
+    )
+    starknet_compile_rule = filegroup(
+        name = f'{name}_starknet_compile',
+        srcs = [extract_rule + '|starknet_compile_bin'],
+        visibility = visibility,
+        binary = True,
+    )
+    starknet_sierra_compile_rule = filegroup(
+        name = f'{name}_starknet_sierra_compile',
+        srcs = [extract_rule + '|starknet_sierra_compile_bin'],
+        visibility = visibility,
+        binary = True,
+    )
+
+
+def cairo_library(name:str, root:str, deps:list=[], visibility:list=None):
+    """Defines a build rule for a Cairo library.
+
+    Args:
+        name (str): Name of the library we're creating.
+        root (str): Source file that the cairo compiler starts from.
+        deps (list): Third-party dependencies.
+        visibility (list): Visibility declaration.
+    """
+    sierra_cmd, sierra_tools = _cairo_compile_cmds()
+    sierra = build_rule(
+        name = name,
+        tag = 'sierra',
+        srcs = [root],
+        outs = [f'{name}.sierra'],
+        cmd = sierra_cmd,
+        deps = ['//third_party/cairo:toolchain_cairo_corelib'] + deps,
+        visibility = visibility,
+        requires = ['cairo'],
+        tools = sierra_tools,
+    )
+    casm_cmd, casm_tools = _sierra_compile_cmds()
+    casm = build_rule(
+        name = name,
+        tag = 'casm',
+        srcs = [sierra],
+        outs = [f'{name}.casm'],
+        cmd = casm_cmd,
+        deps = deps,
+        visibility = visibility,
+        requires = ['cairo'],
+        tools = casm_tools,
+    )
+    return filegroup(
+        name = name,
+        srcs = [sierra, casm],
+        deps = deps,
+        visibility = visibility,
+    )
+
+def _cairo_compile_cmds(
+        single_file:bool=False,
+        replace_ids:bool=False,
+):
+    cmd = ['$TOOLS_CAIRO_COMPILE', '--single-file', '$SRCS', '$OUTS']
+    cmd = ' '.join(cmd)
+    return {
+        'dbg': cmd,
+        'opt': cmd,
+    }, {
+        'cairo_compile': ['//third_party/cairo:toolchain_cairo_compile'],
+    }
+
+
+def _sierra_compile_cmds():
+    cmd = ['$TOOLS_SIERRA_COMPILE', '$SRCS', '$OUTS']
+    cmd = ' '.join(cmd)
+    return {
+        'dbg': cmd,
+        'opt': cmd,
+    }, {
+        'sierra_compile': ['//third_party/cairo:toolchain_sierra_compile'],
+    }
+        
+
+def starknet_contract(name:str, root:str, deps:list=[], visibility:list=None):
+    """Defines a build rule for a Starknet contract.
+
+    Args:
+        name (str): Name of the library we're creating.
+        root (str): Source file that the cairo compiler starts from.
+        deps (list): Third-party dependencies.
+        visibility (list): Visibility declaration.
+    """
+    sierra_cmd, sierra_tools = _starknet_compile_cmds()
+    sierra = build_rule(
+        name = name,
+        tag = 'sierra',
+        srcs = [root],
+        outs = [f'{name}.sierra.json'],
+        cmd = sierra_cmd,
+        deps = deps,
+        visibility = visibility,
+        requires = ['cairo'],
+        tools = sierra_tools,
+    )
+    casm_cmd, casm_tools = _starknet_sierra_compile_cmds()
+    casm = build_rule(
+        name = name,
+        tag = 'casm',
+        srcs = [sierra],
+        outs = [f'{name}.casm'],
+        cmd = casm_cmd,
+        deps = deps,
+        visibility = visibility,
+        requires = ['cairo'],
+        tools = casm_tools,
+    )
+    return filegroup(
+        name = name,
+        srcs = [sierra, casm],
+        deps = deps,
+        visibility = visibility,
+    )
+
+def _starknet_compile_cmds(
+        single_file:bool=False,
+        allow_warnings:bool=False,
+        contract_path:str=None,
+        replace_ids:bool=False,
+        allowed_libfuncs:list=[],
+):
+    cmd = ['$TOOLS_STARKNET_COMPILE', '--single-file', '$SRCS', '$OUTS']
+    cmd = ' '.join(cmd)
+    return {
+        'dbg': cmd,
+        'opt': cmd,
+    }, {
+        'starknet_compile': ['//third_party/cairo:toolchain_starknet_compile'],
+    }
+
+
+def _starknet_sierra_compile_cmds(
+        allowed_libfuncs:list=[],
+        add_pythonic_hints:bool=False,
+        max_byte_code_size:int=180000,
+):
+    cmd = ['$TOOLS_STARKNET_SIERRA_COMPILE', '$SRCS', '$OUTS']
+    cmd = ' '.join(cmd)
+    return {
+        'dbg': cmd,
+        'opt': cmd,
+    }, {
+        'starknet_sierra_compile': ['//third_party/cairo:toolchain_starknet_sierra_compile'],
+    }
